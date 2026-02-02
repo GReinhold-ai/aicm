@@ -696,7 +696,7 @@
 
     <script>
         // Simple form handling - connects to Formspree (free tier)
-        // Replace YOUR_FORM_ID with your actual Formspree form ID
+        // Replace xdadplov with your actual Formspree form ID
         document.getElementById('signupForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -706,8 +706,8 @@
             
             try {
                 // Option 1: Formspree (recommended - free, no backend needed)
-                // Sign up at formspree.io, create a form, replace YOUR_FORM_ID
-                const response = await fetch('https://formspree.io/f/YOUR_FORM_ID', {
+                // Sign up at formspree.io, create a form, replace xdadplov
+                const response = await fetch('https://formspree.io/f/xdadplov', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: email })
