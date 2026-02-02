@@ -1,0 +1,15 @@
+# AICM - Agent Integrity & Compromise Monitor
+# Python Dependencies
+
+# Server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+sqlalchemy>=2.0.0
+pydantic>=2.0.0
+
+# Sensor
+aiohttp>=3.9.0
+
+# Optional: For production deployment
+gunicorn>=21.0.0
+python-multipart>=0.0.6
