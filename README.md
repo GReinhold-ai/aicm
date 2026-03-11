@@ -14,9 +14,7 @@ Built by [Centriv AI](https://centriv.ai) — domain-expert AI agents for regula
 
 AICM is a lightweight security layer you deploy alongside your AI agents. It monitors agent behavior in real time, detects compromise indicators, and auto-quarantines threats before they escalate.
 
-Originally designed as a security monitoring system to detect and quarantine compromised AI agents, with specific focus on detecting participation in "skill-sharing" networks like Moltbook that can dynamically change an agent's code supply chain.
-
-Against the resent McKinsey Lilli attack vector (autonomous agent SQL injection via unauthenticated endpoints), AICM would have:
+Against the McKinsey Lilli attack vector (autonomous agent SQL injection via unauthenticated endpoints), AICM would have:
 - Flagged unauthenticated endpoint exposure at deploy time
 - Detected autonomous probing patterns before escalation
 - Caught JSON key concatenation before SQL execution
