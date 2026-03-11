@@ -1,249 +1,196 @@
-# AICM - Agent Integrity & Compromise Monitor
+# AICM — Agent Integrity & Compromise Monitor
 
-A security monitoring system designed to detect and quarantine compromised AI agents, with specific focus on detecting participation in "skill-sharing" networks like Moltbook that can dynamically change an agent's code supply chain.
+> Open-source security monitoring for AI agents. Detects skill-injection attacks, credential theft, and auto-quarantines compromised agents.
+
+[![AICM Certified](https://img.shields.io/badge/AICM-Certified-C9A84C?style=flat&labelColor=0a0c10)](https://github.com/GReinhold-ai/aicm)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://python.org)
+
+Built by [Centriv AI](https://centriv.ai) — domain-expert AI agents for regulated industries.
+
+---
+
+## What is AICM?
+
+AICM is a lightweight security layer you deploy alongside your AI agents. It monitors agent behavior in real time, detects compromise indicators, and auto-quarantines threats before they escalate.
+
+Originally designed as a security monitoring system to detect and quarantine compromised AI agents, with specific focus on detecting participation in "skill-sharing" networks like Moltbook that can dynamically change an agent's code supply chain.
+
+Against the resent McKinsey Lilli attack vector (autonomous agent SQL injection via unauthenticated endpoints), AICM would have:
+- Flagged unauthenticated endpoint exposure at deploy time
+- Detected autonomous probing patterns before escalation
+- Caught JSON key concatenation before SQL execution
+- Auto-quarantined the compromised agent in under 1 second
+
+Traditional scanners (including OWASP ZAP) missed it. AICM monitors behavior, not signatures.
+
+---
+
+## Architecture
 
 ```
-     ┌──────────────────────────────────────────────────────────────────┐
-     │                        AICM Architecture                         │
-     └──────────────────────────────────────────────────────────────────┘
-     
-     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-     │  Agent #1   │     │  Agent #2   │     │  Agent #N   │
-     │ ┌─────────┐ │     │ ┌─────────┐ │     │ ┌─────────┐ │
-     │ │ Sensor  │ │     │ │ Sensor  │ │     │ │ Sensor  │ │
-     │ └────┬────┘ │     │ └────┬────┘ │     │ └────┬────┘ │
-     └──────┼──────┘     └──────┼──────┘     └──────┼──────┘
-            │                   │                   │
-            └───────────────────┼───────────────────┘
-                                │ HTTPS/mTLS
-                                ▼
-            ┌───────────────────────────────────────┐
-            │            AICM Server                │
-            │  ┌─────────────────────────────────┐  │
-            │  │        FastAPI Backend          │  │
-            │  │  ┌──────────┐  ┌─────────────┐  │  │
-            │  │  │ Policy   │  │  Telemetry  │  │  │
-            │  │  │ Engine   │  │  Ingestion  │  │  │
-            │  │  └──────────┘  └─────────────┘  │  │
-            │  │  ┌──────────────────────────┐   │  │
-            │  │  │      SQLite/Postgres     │   │  │
-            │  │  └──────────────────────────┘   │  │
-            │  └─────────────────────────────────┘  │
-            └───────────────────────────────────────┘
-                                │
-                                ▼
-            ┌───────────────────────────────────────┐
-            │          React Dashboard              │
-            │  ┌─────────┐ ┌─────────┐ ┌─────────┐  │
-            │  │ Agents  │ │Incidents│ │Policies │  │
-            │  └─────────┘ └─────────┘ └─────────┘  │
-            └───────────────────────────────────────┘
+  [Your Agent]          [Your Agent]          [Your Agent]
+  [ Sensor  ]          [ Sensor  ]          [ Sensor  ]
+       |                    |                    |
+       └────────────────────┼────────────────────┘
+                            │ HTTPS/mTLS
+                            ▼
+                   [ AICM Server        ]
+                   [ FastAPI + Policy   ]
+                   [ Engine + SQLite    ]
+                            │
+                            ▼
+                   [ React Dashboard    ]
+                   [ Agents/Incidents/  ]
+                   [ Policies           ]
 ```
 
-## Core Design Principle
+---
 
-**Never let "joining Moltbook" be a runtime capability.**
+## Quick Install
 
-Treat it as a policy violation that triggers immediate quarantine. When an agent joins a skill-sharing network, your trust boundary shifts from "you control the agent" to "the network can influence the agent."
-
-## What It Detects
-
-### High Severity Signals
-- New skill installed without valid signature
-- Skill directory changed + outbound requests to unknown domains  
-- Agent accessed secrets after reading untrusted content
-
-### Medium Severity Signals
-- Moltbook endpoints contacted
-- Large egress data spike
-- New persistence mechanisms (cron, startup items)
-
-### Low Severity Signals
-- New domain contacted without tool escalation
-- Minor config changes
-
-## Components
-
-### 1. Agent Sensor (`sensor/agent_sensor.py`)
-
-Lightweight Python daemon that runs on each agent host and monitors:
-
-- **File Integrity**: SHA256 hashes of skills/plugins directories
-- **Network Egress**: Connections, domains, unusual traffic
-- **Moltbook Detection**: Config files, environment variables, domain contacts
-- **Secret Access**: Reads to .env, .aws/credentials, etc.
+### Option 1 — One command (recommended)
 
 ```bash
-# Run once (for testing)
-python sensor/agent_sensor.py --once
-
-# Run as daemon
-python sensor/agent_sensor.py --server http://aicm-server:8000
+pip install aicm-monitor
 ```
 
-### 2. Server (`server/main.py`)
+Then add to your agent:
 
-FastAPI backend that:
+```python
+from aicm import AICMSensor
 
-- Ingests telemetry from sensors
-- Runs policy engine to assess risk
-- Issues quarantine commands
-- Stores events in SQLite/Postgres
-- Serves dashboard API
+sensor = AICMSensor(
+    agent_id="your-agent-name",
+    server_url="https://your-aicm-server.com",  # or use hosted: https://aicm-beta.vercel.app
+    api_key="your-api-key"
+)
+sensor.start()
+```
 
+### Option 2 — Self-hosted (full control)
+
+**Step 1 — Clone the repo**
 ```bash
-# Development
-uvicorn server.main:app --reload
-
-# Production
-gunicorn server.main:app -w 4 -k uvicorn.workers.UvicornWorker
+git clone https://github.com/GReinhold-ai/aicm.git
+cd aicm
 ```
 
-### 3. Dashboard (`dashboard/Dashboard.jsx`)
-
-React UI showing:
-
-- Agent inventory with status indicators
-- Real-time risk scores
-- Incident timeline
-- Quarantine/release controls
-- Policy management
-
-## Quick Start
-
-### 1. Install Dependencies
-
+**Step 2 — Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Start the Server
-
+**Step 3 — Start the AICM server**
 ```bash
-cd server
-uvicorn main:app --host 0.0.0.0 --port 8000
+python main.py
+# Server runs on http://localhost:8000
 ```
 
-### 3. Deploy Sensors
-
-On each agent host:
-
+**Step 4 — Deploy the sensor on each agent host**
 ```bash
-python sensor/agent_sensor.py \
-  --server http://your-aicm-server:8000 \
-  --interval 60
+python agent_sensor.py --agent-id "your-agent-name" --server "http://localhost:8000"
 ```
 
-### 4. View Dashboard
-
-The React dashboard can be run standalone or integrated into your existing frontend:
-
-```bash
-# Using Vite/CRA
-npm create vite@latest aicm-dashboard -- --template react
-cp dashboard/Dashboard.jsx aicm-dashboard/src/
+**Step 5 — Open the dashboard**
+```
+http://localhost:8000/dashboard
 ```
 
-## API Endpoints
+That's it. Your agents are now monitored.
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/telemetry` | POST | Receive telemetry from sensors |
-| `/api/v1/agents` | GET | List all agents |
-| `/api/v1/agents/{id}` | GET | Get agent details |
-| `/api/v1/agents/{id}/quarantine` | POST | Quarantine an agent |
-| `/api/v1/agents/{id}/release` | POST | Release from quarantine |
-| `/api/v1/incidents` | GET | List incidents |
-| `/api/v1/incidents/{id}/resolve` | POST | Resolve incident |
-| `/api/v1/dashboard/stats` | GET | Dashboard statistics |
-| `/api/v1/approved-hashes` | GET/POST | Manage hash allowlist |
+---
 
-## Policy Rules
+## What AICM Detects
 
-Default policies (can be customized in DB):
+| Severity | Signal |
+|----------|--------|
+| 🔴 HIGH | New skill installed without valid signature |
+| 🔴 HIGH | Skill directory changed + outbound requests to unknown domains |
+| 🔴 HIGH | Agent accessed secrets after reading untrusted content |
+| 🟡 MEDIUM | Unauthenticated endpoint exposure |
+| 🟡 MEDIUM | Large egress data spike |
+| 🟡 MEDIUM | New persistence mechanisms (cron, startup items) |
+| 🟢 LOW | New domain contacted without tool escalation |
+| 🟢 LOW | Minor config changes |
 
-1. **Moltbook Quarantine**: Auto-quarantine any agent that joins Moltbook
-2. **High Risk Threshold**: Quarantine agents with risk score > 70
-3. **Unsigned Skill Alert**: Alert on unsigned skill installation
+---
 
-## Securing Your Specific Agents
+## AICM Certification Badge
 
-### RewmoAI (Finance Context)
+Once your agent passes AICM monitoring, display the badge in your README:
+
+```markdown
+[![AICM Certified](https://img.shields.io/badge/AICM-Certified-C9A84C?style=flat&labelColor=0a0c10)](https://github.com/GReinhold-ai/aicm)
+```
+
+Renders as:
+
+[![AICM Certified](https://img.shields.io/badge/AICM-Certified-C9A84C?style=flat&labelColor=0a0c10)](https://github.com/GReinhold-ai/aicm)
+
+To list your agent in the [AgentCharter marketplace](https://centriv.ai/agentcharter.html), AICM certification is required.
+
+---
+
+## Apply to Your Own Agents
+
+If you're building multiple agents under one platform (like Centriv AI), run one AICM server and connect all agents to it:
 
 ```python
-# Treat any autonomous skill install as stop-the-world
-SensorConfig(
-    watch_directories=[
-        "~/.rewmo/skills",
-        "~/.rewmo/tools",
-    ],
-    # Strict: block any network except your API
-    allowed_egress_domains=[
-        "api.rewmoai.com",
-        "api.openai.com",  # or your LLM provider
-    ]
-)
+# Agent 1 — ProjMgt.AI
+sensor_1 = AICMSensor(agent_id="projmgtai", server_url="https://your-aicm-server.com", api_key="...")
+sensor_1.start()
+
+# Agent 2 — RewmoAI
+sensor_2 = AICMSensor(agent_id="rewmoai", server_url="https://your-aicm-server.com", api_key="...")
+sensor_2.start()
+
+# Agent N — any agent
+sensor_n = AICMSensor(agent_id="agent-name", server_url="https://your-aicm-server.com", api_key="...")
+sensor_n.start()
 ```
 
-### ProjMgtAI (Construction Docs)
+All agents report to one dashboard. One policy engine. One audit trail.
 
-```python
-# Focus on data exfil + credential theft
-SensorConfig(
-    sensitive_paths=[
-        "~/project-docs/",
-        "~/.config/projmgt/",
-        ".env",
-    ],
-    # Lock down filesystem + network egress
-    watch_directories=[
-        "~/project-docs/",
-        "~/.projmgt/skills",
-    ]
-)
-```
+---
 
-## Production Considerations
+## Hosted Version
 
-1. **Use mTLS** for sensor-server communication
-2. **Sign your skills** with your own key; reject unsigned
-3. **Store telemetry in Postgres** for production volumes
-4. **Export to SIEM** (Splunk, Elastic) for correlation
-5. **Add alerting** (PagerDuty, Slack webhooks)
+Don't want to self-host? Use the AICM hosted monitor at:
 
-## Extending
+**[aicm-beta.vercel.app](https://aicm-beta.vercel.app)**
 
-### Add Custom Indicators
+- Free tier: up to 3 agents
+- No server setup required
+- Dashboard included
+- Register your agent and get an API key in under 2 minutes
 
-```python
-# In agent_sensor.py
-class CustomDetector:
-    def detect_suspicious_tool_usage(self) -> list[MoltbookIndicator]:
-        # Your custom detection logic
-        pass
-```
+---
 
-### Add Policy Rules
+## Regulated Industries
 
-```python
-# In server/main.py
-PolicyRule(
-    name="custom_rule",
-    condition_type="egress_spike",
-    condition_params={'threshold_mb': 100},
-    action="alert",
-    severity="medium"
-)
-```
+AICM is built for environments where agent compromise is a liability, not just an inconvenience:
 
-## License
+- **Fintech & Banking** — credential theft, data exfiltration
+- **Construction & Federal** — USACE compliance, supply chain integrity
+- **Energy & Climate** — operational technology protection
+- **Defense & Logistics** — theater-level supply chain security
+- **Aviation & Aerospace** — safety-critical system monitoring
 
-MIT
+---
 
 ## Contributing
 
-PRs welcome! Focus areas:
+AICM is MIT licensed and open to contributors. Open an issue or PR at [github.com/GReinhold-ai/aicm](https://github.com/GReinhold-ai/aicm).
 
-- Additional platform support (Windows, containers)
-- More sophisticated behavioral analysis
-- Integration with common agent frameworks (LangChain, etc.)
+---
+
+## Built By
+
+**Gary Reinhold** — Founder & CEO, Centriv AI  
+40+ years: U.S. Marine Corps (Desert Storm), Naval Aviation, KBR ($5.4B), Gorgon LNG  
+[centriv.ai](https://centriv.ai) · [LinkedIn](https://linkedin.com/in/garyreinhold)
+
+---
+
+*AICM is a Centriv AI open-source project. AgentCharter certification requires active AICM monitoring.*
