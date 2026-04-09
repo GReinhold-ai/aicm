@@ -1,194 +1,215 @@
-# AICM — Agent Integrity & Compromise Monitor
+# AICM Quickstart — Behavioral Monitoring for AI Agents
 
-> Open-source security monitoring for AI agents. Detects skill-injection attacks, credential theft, and auto-quarantines compromised agents.
-
-[![AICM Certified](https://img.shields.io/badge/AICM-Certified-C9A84C?style=flat&labelColor=0a0c10)](https://github.com/GReinhold-ai/aicm)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://python.org)
-
-Built by [Centriv AI](https://centriv.ai) — domain-expert AI agents for regulated industries.
+> **"Autonomy without observability is just a liability with an API key."**
+> — Gary Reinhold, Centriv AI
 
 ---
 
-## What is AICM?
+## The Problem in 30 Seconds
 
-AICM is a lightweight security layer you deploy alongside your AI agents. It monitors agent behavior in real time, detects compromise indicators, and auto-quarantines threats before they escalate.
+Your AI agent has legitimate access. It was set up correctly. You trust it.
 
-Against the McKinsey Lilli attack vector (autonomous agent SQL injection via unauthenticated endpoints), AICM would have:
-- Flagged unauthenticated endpoint exposure at deploy time
-- Detected autonomous probing patterns before escalation
-- Caught JSON key concatenation before SQL execution
-- Auto-quarantined the compromised agent in under 1 second
+But nobody is watching *what it does over time* — only *whether it was authorized to be there.*
 
-Traditional scanners (including OWASP ZAP) missed it. AICM monitors behavior, not signatures.
+That's the gap AICM closes.
 
----
-
-## Architecture
-
-```
-  [Your Agent]          [Your Agent]          [Your Agent]
-  [ Sensor  ]          [ Sensor  ]          [ Sensor  ]
-       |                    |                    |
-       └────────────────────┼────────────────────┘
-                            │ HTTPS/mTLS
-                            ▼
-                   [ AICM Server        ]
-                   [ FastAPI + Policy   ]
-                   [ Engine + SQLite    ]
-                            │
-                            ▼
-                   [ React Dashboard    ]
-                   [ Agents/Incidents/  ]
-                   [ Policies           ]
-```
+Traditional security asks: **"Is this agent allowed in?"**
+AICM asks: **"Is this agent behaving consistently with its charter — right now, and over time?"**
 
 ---
 
-## Quick Install
+## What Is the Decision-Commit Boundary?
 
-### Option 1 — One command (recommended)
+Every AI agent has a moment where its output shifts from **advisory** to **executable** — from "here's a recommendation" to "I am doing this."
 
-```bash
-pip install aicm-monitor
-```
+That boundary is where catastrophic failures happen. Not because the agent was breached. Because nobody was watching the behavioral drift *leading up to* that boundary being crossed.
 
-Then add to your agent:
-
-```python
-from aicm import AICMSensor
-
-sensor = AICMSensor(
-    agent_id="your-agent-name",
-    server_url="https://your-aicm-server.com",  # or use hosted: https://aicm-beta.vercel.app
-    api_key="your-api-key"
-)
-sensor.start()
-```
-
-### Option 2 — Self-hosted (full control)
-
-**Step 1 — Clone the repo**
-```bash
-git clone https://github.com/GReinhold-ai/aicm.git
-cd aicm
-```
-
-**Step 2 — Install dependencies**
-```bash
-pip install -r requirements.txt
-```
-
-**Step 3 — Start the AICM server**
-```bash
-python main.py
-# Server runs on http://localhost:8000
-```
-
-**Step 4 — Deploy the sensor on each agent host**
-```bash
-python agent_sensor.py --agent-id "your-agent-name" --server "http://localhost:8000"
-```
-
-**Step 5 — Open the dashboard**
-```
-http://localhost:8000/dashboard
-```
-
-That's it. Your agents are now monitored.
+AICM monitors this boundary architecturally — not at the prompt level.
 
 ---
 
 ## What AICM Detects
 
-| Severity | Signal |
-|----------|--------|
-| 🔴 HIGH | New skill installed without valid signature |
-| 🔴 HIGH | Skill directory changed + outbound requests to unknown domains |
-| 🔴 HIGH | Agent accessed secrets after reading untrusted content |
-| 🟡 MEDIUM | Unauthenticated endpoint exposure |
-| 🟡 MEDIUM | Large egress data spike |
-| 🟡 MEDIUM | New persistence mechanisms (cron, startup items) |
-| 🟢 LOW | New domain contacted without tool escalation |
-| 🟢 LOW | Minor config changes |
+| Signal | What It Means |
+|--------|---------------|
+| Scope expansion | Agent accessing resources outside its defined charter |
+| Velocity anomaly | Unusually rapid sequential actions (e.g., touching 20 vaults in minutes) |
+| Privilege escalation | Agent modifying its own permissions or limits |
+| Pre-commitment drift | Gradual behavioral trajectory toward a high-consequence action |
+| Skill injection | External code dynamically altering agent behavior |
+| Credential access patterns | Unusual access to authentication or secrets |
 
 ---
 
-## AICM Certification Badge
+## Quickstart: Add AICM to Your Agent in 15 Minutes
 
-Once your agent passes AICM monitoring, display the badge in your README:
+### Prerequisites
+- Python 3.9+
+- An AI agent you can instrument (any framework: LangChain, AutoGen, custom)
+- Docker (optional, for the full stack)
 
-```markdown
-[![AICM Certified](https://img.shields.io/badge/AICM-Certified-C9A84C?style=flat&labelColor=0a0c10)](https://github.com/GReinhold-ai/aicm)
+---
+
+### Step 1 — Clone and Install
+
+```bash
+git clone https://github.com/GReinhold-ai/aicm.git
+cd aicm
+pip install -r requirements.txt
 ```
 
-Renders as:
+---
 
-[![AICM Certified](https://img.shields.io/badge/AICM-Certified-C9A84C?style=flat&labelColor=0a0c10)](https://github.com/GReinhold-ai/aicm)
+### Step 2 — Start the AICM Server
 
-To list your agent in the [AgentCharter marketplace](https://centriv.ai/agentcharter.html), AICM certification is required.
+```bash
+# Development
+uvicorn server.main:app --reload
+
+# Production
+gunicorn server.main:app -w 4 -k uvicorn.workers.UvicornWorker
+```
+
+Server runs at `http://localhost:8000`. This is your behavioral monitoring backend.
 
 ---
 
-## Apply to Your Own Agents
+### Step 3 — Attach a Sensor to Your Agent
 
-If you're building multiple agents under one platform (like Centriv AI), run one AICM server and connect all agents to it:
+The sensor is a lightweight wrapper. Add it to any agent that can execute actions.
 
 ```python
-# Agent 1 — ProjMgt.AI
-sensor_1 = AICMSensor(agent_id="projmgtai", server_url="https://your-aicm-server.com", api_key="...")
-sensor_1.start()
+from sensor.agent_sensor import AICMSensor
 
-# Agent 2 — RewmoAI
-sensor_2 = AICMSensor(agent_id="rewmoai", server_url="https://your-aicm-server.com", api_key="...")
-sensor_2.start()
+# Initialize — point at your AICM server
+sensor = AICMSensor(
+    agent_id="my-finance-agent",
+    server_url="http://localhost:8000",
+    charter={
+        "allowed_actions": ["read_account", "generate_report", "send_notification"],
+        "restricted_actions": ["modify_limits", "bulk_transfer", "delete_records"],
+        "max_actions_per_minute": 10
+    }
+)
 
-# Agent N — any agent
-sensor_n = AICMSensor(agent_id="agent-name", server_url="https://your-aicm-server.com", api_key="...")
-sensor_n.start()
+# Wrap your agent's action executor
+def execute_action(action, params):
+    
+    # AICM intercepts here — before execution
+    decision = sensor.checkpoint(action, params)
+    
+    if decision.status == "HOLD":
+        # Escalate to human oversight
+        notify_human_supervisor(decision.reason)
+        return
+    
+    if decision.status == "QUARANTINE":
+        # Agent has been flagged — stop all execution
+        sensor.quarantine()
+        alert_security_team(decision.alert)
+        return
+    
+    # Proceed — AICM cleared this action
+    your_existing_executor(action, params)
 ```
 
-All agents report to one dashboard. One policy engine. One audit trail.
+---
+
+### Step 4 — Run the Sensor
+
+```bash
+# One-time check (for testing)
+python sensor/agent_sensor.py --once
+
+# Continuous monitoring (production)
+python sensor/agent_sensor.py --server http://localhost:8000
+```
 
 ---
 
-## Hosted Version
+### Step 5 — View the Dashboard
 
-Don't want to self-host? Use the AICM hosted monitor at:
+```bash
+# Using Vite
+npm create vite@latest aicm-dashboard -- --template react
+cp dashboard/Dashboard.jsx aicm-dashboard/src/
+cd aicm-dashboard && npm run dev
+```
 
-**[aicm-beta.vercel.app](https://aicm-beta.vercel.app)**
-
-- Free tier: up to 3 agents
-- No server setup required
-- Dashboard included
-- Register your agent and get an API key in under 2 minutes
+Or view the live beta: **aicm-beta.vercel.app**
 
 ---
 
-## Regulated Industries
+## How AICM Would Have Stopped the Drift Protocol Hack
 
-AICM is built for environments where agent compromise is a liability, not just an inconvenience:
+The $271M Drift hack followed a predictable behavioral pattern:
 
-- **Fintech & Banking** — credential theft, data exfiltration
-- **Construction & Federal** — USACE compliance, supply chain integrity
-- **Energy & Climate** — operational technology protection
-- **Defense & Logistics** — theater-level supply chain security
-- **Aviation & Aerospace** — safety-critical system monitoring
+1. Legitimate access established over 6 months ✓
+2. Gradual scope expansion into vault management systems ✓
+3. Permission limits quietly modified ✓
+4. **Single night: 20 vaults drained, assets converted, funds moved** ← AICM triggers here
+
+AICM would have flagged:
+- **Velocity anomaly**: 20 sequential vault interactions in minutes
+- **Decision-Commit Boundary crossed**: withdrawal limit modification is a charter violation
+- **Behavioral drift alert**: cumulative action pattern trending toward mass execution
+- **Auto-quarantine**: agent execution suspended pending human review
+
+The operatives built the access over 6 months. AICM watches the *execution layer* — where access becomes consequence.
+
+---
+
+## AICM Certification
+
+Once your agent fleet is instrumented and monitored, AICM provides **behavioral certification** — documented evidence that your agents operated within chartered boundaries.
+
+This is not self-reported compliance. It is runtime behavioral evidence.
+
+Certification supports:
+- Enterprise AI governance requirements
+- Regulatory audit trails (SOC 2, FedRAMP, emerging AI governance frameworks)
+- CISO-level documentation for board reporting
+- BAEI Framework verification (Phase 4: Verify & Certify)
+
+Learn more: **[centriv.ai/aicm.html](https://www.centriv.ai/aicm.html)**
+
+---
+
+## BAEI Framework Integration
+
+AICM is the runtime monitoring layer within the **Balanced Agent Enterprise Integration (BAEI)** framework:
+
+| Phase | Description | AICM Role |
+|-------|-------------|-----------|
+| 1. Process Discovery | Audit workflows before deployment | Baseline behavioral profiling |
+| 2. Agent Chartering | Define scope, boundaries, escalation paths | Charter configuration |
+| 3. Fleet Integration | Multi-agent coordination | Cross-agent behavioral correlation |
+| 4. Verify & Certify | Runtime behavioral monitoring | **Core AICM function** |
+| 5. Continuous Governance | Ongoing monitoring, re-chartering | Long-term drift detection |
+
+---
+
+## Stay Updated
+
+- **GitHub**: [GReinhold-ai/aicm](https://github.com/GReinhold-ai/aicm) — star the repo
+- **Live beta**: [aicm-beta.vercel.app](https://aicm-beta.vercel.app)
+- **Enterprise & certification**: [centriv.ai/aicm.html](https://www.centriv.ai/aicm.html)
+- **Early access list**: Register at centriv.ai/aicm.html
 
 ---
 
 ## Contributing
 
-AICM is MIT licensed and open to contributors. Open an issue or PR at [github.com/GReinhold-ai/aicm](https://github.com/GReinhold-ai/aicm).
+AICM is open source. Contributions welcome:
+
+- Additional sensor integrations (LangChain, AutoGen, CrewAI, custom)
+- Behavioral anomaly detection models
+- Dashboard enhancements
+- Documentation and examples
+
+Open an issue or submit a PR at **github.com/GReinhold-ai/aicm**
 
 ---
 
-## Built By
-
-**Gary Reinhold** — Founder & CEO, Centriv AI  
-40+ years: U.S. Marine Corps (Desert Storm), Naval Aviation, KBR ($5.4B), Gorgon LNG  
-[centriv.ai](https://centriv.ai) · [LinkedIn](https://linkedin.com/in/garyreinhold)
-
----
-
-*AICM is a Centriv AI open-source project. AgentCharter certification requires active AICM monitoring.*
+*AICM is developed by Centriv AI. The BAEI framework is licensable for enterprise deployment.*
+*© Centriv AI — Gary Reinhold, Founder*
