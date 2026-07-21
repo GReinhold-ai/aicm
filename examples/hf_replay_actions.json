@@ -1,0 +1,14 @@
+{
+  "scenario": "Post-exploitation action chain (modeled on the July 2026 Hugging Face disclosure)",
+  "note": "Initial access was a dataset-loader RCE -- a vulnerability, patched separately. The chain below is what turned code execution into a breach: escalate, harvest, move. These are commits. This replay asks what a commit-boundary authorization gate does to that same chain.",
+  "workload_identity": "ds-worker-14",
+  "identity_scope": "dataset processing only (read assigned dataset, write processed output)",
+  "actions": [
+    { "seq": 1, "action": "process_dataset",     "target": "assigned/dataset-8842",      "note": "legitimate in-scope work" },
+    { "seq": 2, "action": "escalate_privilege",   "target": "node:worker-pool-3",         "note": "attacker seeks node-level access" },
+    { "seq": 3, "action": "read_secret",          "target": "cloud-credential-store",     "note": "credential harvesting" },
+    { "seq": 4, "action": "assume_role",          "target": "cluster-b:orchestrator",     "note": "lateral movement" },
+    { "seq": 5, "action": "read_dataset",         "target": "internal/private-eval-set",  "note": "access to internal data" },
+    { "seq": 6, "action": "egress",               "target": "external:staging-c2",        "note": "exfiltration / C2 staging" }
+  ]
+}
