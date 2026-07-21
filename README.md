@@ -140,6 +140,48 @@ Or view the live beta: **aicm-beta.vercel.app**
 
 ---
 
+## Example: Reproduce the Hugging Face Breach Replay
+
+In July 2026, Hugging Face disclosed that an autonomous agent executed 17,000+ actions across its production infrastructure — code execution, privilege escalation, credential harvesting, lateral movement. The initial entry was a vulnerability. The **breach** was the chain that came after.
+
+Every step in that chain is a commit. The example below replays that same post-exploitation sequence through a commit-boundary check and shows what happens when something is authorized to refuse.
+
+This is a minimal, dependency-free illustration of the boundary logic — **no server required**. For the full sensor + server flow, see the Quickstart above.
+
+**Run it** (from the repo root):
+
+```
+cd examples
+python3 aicm_replay.py
+```
+
+**Expected output:**
+
+```
+identity : ds-worker-14
+scope    : dataset processing only (read assigned dataset, write processed output)
+
+seq  action             target                     decision
+------------------------------------------------------------------
+  1  process_dataset    assigned/dataset-8842      ALLOW
+  2  escalate_privilege node:worker-pool-3         REFUSE  <- chain breaks here
+  3  read_secret        cloud-credential-store     REFUSE  <- chain breaks here
+  4  assume_role        cluster-b:orchestrator     REFUSE  <- chain breaks here
+  5  read_dataset       internal/private-eval-set  REFUSE  <- chain breaks here
+  6  egress             external:staging-c2        REFUSE  <- chain breaks here
+------------------------------------------------------------------
+5 of 6 commits refused at the boundary.
+The one allowed action was the worker doing its actual job.
+```
+
+The one action that passes is the worker doing its assigned job. Every step that turns code execution into a breach is refused — not because a filter judged the content dangerous, but because the acting identity was never authorized for that action against that resource. Every attempt, allowed or refused, is written to a hash-chained, tamper-evident record.
+
+**This is authorization enforcement at the decision-commit boundary — not a model watching a model.**
+
+Run it against your own agents by editing `examples/hf_replay_actions.json` and defining the acting identity's scope in `aicm_replay.py`. Anything not explicitly in scope is refused — deny unless authorized.
+
+---
+
 ## How AICM Would Have Stopped the Drift Protocol Hack
 
 The $271M Drift hack followed a predictable behavioral pattern:
